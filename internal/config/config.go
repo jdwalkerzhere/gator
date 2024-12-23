@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-const ConfigPath = "./.gatorconfig.json"
+const ConfigPath = "/.gatorconfig.json"
 
 type Config struct {
 	DbUrl       string `json:"db_url"`
@@ -13,7 +13,11 @@ type Config struct {
 }
 
 func Read() (Config, error) {
-	configFile, err := os.ReadFile(ConfigPath)
+	pathToHome, err := os.UserHomeDir()
+	if err != nil {
+		return Config{}, err
+	}
+	configFile, err := os.ReadFile(pathToHome + ConfigPath)
 	if err != nil {
 		return Config{}, err
 	}
@@ -33,7 +37,13 @@ func SetUser(config *Config, username string) error {
 		return err
 	}
 
-	if err := os.WriteFile(ConfigPath, encoded, 0644); err != nil {
+	pathToHome, err := os.UserHomeDir()
+
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(pathToHome+ConfigPath, encoded, 0644); err != nil {
 		return err
 	}
 	return nil

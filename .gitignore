@@ -1,1 +1,38 @@
-.gatorconfig.json
+# Binary files
+*.exe
+*.out
+*.dll
+*.so
+*.dylib
+
+# Build directories
+/build/
+bin/
+dist/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+*.log
+
+# IDE/Editor specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Go-specific files
+*.test            # Test binary files
+*.tmp             # Temporary files during builds or tests
+*.o               # Object files
+vendor/           # Vendor dependencies (if you use `go mod vendor`)
+
+# SQLC generated files
+sqlc.yaml         # If the config is environment-specific
+*.sql.go          # Generated SQL files (if you regenerate them)
+
+# Configurations and credentials
+/internal/config/config.json   # Sensitive or environment-specific configs
+*.env             # Environment files for secrets
+.env.*            # Optional environment files (e.g., `.env.production`)
+

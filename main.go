@@ -1,14 +1,21 @@
 package main
 
+import _ "github.com/lib/pq"
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jdwalkerzhere/gator/internal/config"
+	"github.com/jdwalkerzhere/gator/internal/database"
 )
 
 type state struct {
+	db     *database.Queries
 	config *config.Config
 }
 
@@ -45,10 +52,38 @@ func handlerLogin(s *state, cmd command) error {
 		return fmt.Errorf("Must provide arguments to `login` command, None provided")
 	}
 	newUser := cmd.arguments[0]
+	if _, err := s.db.GetUser(context.Background(), newUser); err != nil {
+		fmt.Printf("User [%s] doesn't exists, register username first", newUser)
+		os.Exit(1)
+	}
 	if err := config.SetUser(s.config, newUser); err != nil {
 		return err
 	}
 	fmt.Printf("User [%s] set as current user\n", newUser)
+	return nil
+}
+
+func handlerRegister(s *state, cmd command) error {
+	if len(cmd.arguments) == 0 {
+		return fmt.Errorf("Must provide argument to `register` command, None provided")
+	}
+	if user, err := s.db.GetUser(context.Background(), cmd.arguments[0]); err == nil {
+		fmt.Printf("User [%s] already exists, register with different username", user.Name)
+		os.Exit(1)
+	}
+	now := time.Now()
+	userParams := database.CreateUserParams{
+		ID:        uuid.New(),
+		CreatedAt: now,
+		UpdatedAt: now,
+		Name:      cmd.arguments[0],
+	}
+	user, err := s.db.CreateUser(context.Background(), userParams)
+	if err != nil {
+		return err
+	}
+	config.SetUser(s.config, user.Name)
+	fmt.Printf("New user [%s] created", user.Name)
 	return nil
 }
 
@@ -57,9 +92,15 @@ func main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	state := state{&cnfg}
+	db, err := sql.Open("postgres", cnfg.DbUrl)
+	if err != nil {
+		log.Panic(err)
+	}
+	dbQueries := database.New(db)
+	state := state{dbQueries, &cnfg}
 	cmds := commands{}
 	cmds.register("login", handlerLogin)
+	cmds.register("register", handlerRegister)
 	arguments := os.Args
 
 	if len(arguments) < 2 {

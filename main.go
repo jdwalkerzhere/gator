@@ -87,6 +87,13 @@ func handlerRegister(s *state, cmd command) error {
 	return nil
 }
 
+func handlerReset(s *state, cmd command) error {
+	if err := s.db.Reset(context.Background()); err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
 	cnfg, err := config.Read()
 	if err != nil {
@@ -101,6 +108,7 @@ func main() {
 	cmds := commands{}
 	cmds.register("login", handlerLogin)
 	cmds.register("register", handlerRegister)
+	cmds.register("reset", handlerReset)
 	arguments := os.Args
 
 	if len(arguments) < 2 {

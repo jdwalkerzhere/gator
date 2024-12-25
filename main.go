@@ -1,18 +1,38 @@
 package main
 
-import _ "github.com/lib/pq"
 import (
 	"context"
 	"database/sql"
+	"encoding/xml"
 	"fmt"
+	"html"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jdwalkerzhere/gator/internal/config"
 	"github.com/jdwalkerzhere/gator/internal/database"
+	_ "github.com/lib/pq"
 )
+
+type RSSFeed struct {
+	Channel struct {
+		Title       string    `xml:"title"`
+		Link        string    `xml:"link"`
+		Description string    `xml:"description"`
+		Item        []RSSItem `xml:"item"`
+	} `xml:"channel"`
+}
+
+type RSSItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
+}
 
 type state struct {
 	db     *database.Queries
@@ -109,6 +129,50 @@ func handlerGetUsers(s *state, _ command) error {
 	return nil
 }
 
+func handlerAgg(s *state, cmd command) error {
+	feed, err := fetchFeed(context.Background(), "https://wagslane.dev/index.xml")
+	if err != nil {
+		return err
+	}
+	fmt.Println(*feed)
+	return nil
+}
+
+func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+	ctxRequest, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
+	if err != nil {
+		return &RSSFeed{}, err
+	}
+	ctxRequest.Header.Set("User-Agent", "gator")
+	client := http.Client{}
+	resp, err := client.Do(ctxRequest)
+	if err != nil {
+		return &RSSFeed{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &RSSFeed{}, err
+	}
+
+	feed := RSSFeed{}
+	if err := xml.Unmarshal(body, &feed); err != nil {
+		return &RSSFeed{}, err
+	}
+
+	feed.Channel.Title = html.UnescapeString(feed.Channel.Title)
+	feed.Channel.Link = html.UnescapeString(feed.Channel.Link)
+	feed.Channel.Description = html.UnescapeString(feed.Channel.Description)
+
+	for i, item := range feed.Channel.Item {
+		feed.Channel.Item[i].Title = html.UnescapeString(item.Title)
+		feed.Channel.Item[i].Link = html.UnescapeString(item.Link)
+		feed.Channel.Item[i].Description = html.UnescapeString(item.Description)
+	}
+	return &feed, nil
+}
+
 func main() {
 	cnfg, err := config.Read()
 	if err != nil {
@@ -125,6 +189,7 @@ func main() {
 	cmds.register("register", handlerRegister)
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerGetUsers)
+	cmds.register("agg", handlerAgg)
 	arguments := os.Args
 
 	if len(arguments) < 2 {

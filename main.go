@@ -130,11 +130,47 @@ func handlerGetUsers(s *state, _ command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
-	feed, err := fetchFeed(context.Background(), "https://wagslane.dev/index.xml")
+	feed, err := fetchFeed(context.Background(), cmd.arguments[0])
 	if err != nil {
 		return err
 	}
 	fmt.Println(*feed)
+	return nil
+}
+
+func handlerAddFeed(s *state, cmd command) error {
+	if len(cmd.arguments) < 2 {
+		return fmt.Errorf("Insufficient number of arguments")
+	}
+	user, err := s.db.GetUser(context.Background(), s.config.CurrentUser)
+	if err != nil {
+		return fmt.Errorf("Error fetching current user from Database")
+	}
+	now := time.Now()
+	feedParams := database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: now,
+		UpdatedAt: now,
+		Name:      cmd.arguments[0],
+		Url:       cmd.arguments[1],
+		UserID:    user.ID,
+	}
+	feed, err := s.db.CreateFeed(context.Background(), feedParams)
+	if err != nil {
+		return err
+	}
+	fmt.Println(feed)
+	return nil
+}
+
+func handlerFeeds(s *state, cmd command) error {
+	feeds, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, feed := range feeds {
+		fmt.Printf("Name: %s\n\t- URL: %s\n\t- Added By: %s\n", feed.Name, feed.Url, feed.UserName)
+	}
 	return nil
 }
 
@@ -190,6 +226,8 @@ func main() {
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerGetUsers)
 	cmds.register("agg", handlerAgg)
+	cmds.register("addfeed", handlerAddFeed)
+	cmds.register("feeds", handlerFeeds)
 	arguments := os.Args
 
 	if len(arguments) < 2 {

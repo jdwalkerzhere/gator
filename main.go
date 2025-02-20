@@ -138,6 +138,45 @@ func handlerAgg(s *state, _ command) error {
 	return nil
 }
 
+func handlerAddFeed(s *state, cmd command) error {
+	if len(cmd.args) < 2 {
+		return fmt.Errorf("Insufficient arguments, please provide both feed name and url")
+	}
+
+	currentUser, err := s.db.GetUser(context.Background(), s.cfg.CurrentUser)
+	if err != nil {
+		return err
+	}
+
+	name, url := cmd.args[0], cmd.args[1]
+	timeNow := time.Now()
+	feedParams := database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: timeNow,
+		UpdatedAt: timeNow,
+		Name:      name,
+		Url:       url,
+		UserID:    currentUser.ID,
+	}
+	feed, err := s.db.CreateFeed(context.Background(), feedParams)
+	if err != nil {
+		return err
+	}
+	fmt.Println(feed)
+	return nil
+}
+
+func handlerFeeds(s *state, _ command) error {
+	feeds, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, feed := range feeds {
+		fmt.Printf("Name: %s\n\t- URL: %s\n\t- Added By: %s\n", feed.FeedName, feed.Url, feed.UserName)
+	}
+	return nil
+}
+
 type commands struct {
 	commandMap map[string]func(*state, command) error
 }
@@ -178,6 +217,8 @@ func main() {
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerGetUsers)
 	cmds.register("agg", handlerAgg)
+	cmds.register("addfeed", handlerAddFeed)
+	cmds.register("feeds", handlerFeeds)
 
 	// fetching user cli args
 	args := os.Args

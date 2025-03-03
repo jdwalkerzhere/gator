@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -140,7 +141,49 @@ func scrapeFeeds(s *state) error {
 		return err
 	}
 	for _, feedItem := range fetchedFeed.Channel.Item {
-		fmt.Println(feedItem.Title)
+		timeNow := time.Now()
+		pubDate, err := time.Parse(time.RFC1123Z, feedItem.PubDate)
+		if err != nil {
+			return fmt.Errorf("Error parsing datetime %s into RFC1123Z", feedItem.PubDate)
+		}
+		postParams := database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   timeNow,
+			UpdatedAt:   timeNow,
+			Title:       feedItem.Title,
+			Url:         feedItem.Link,
+			Description: feedItem.Description,
+			PublishedAt: pubDate,
+			FeedID:      nextFeed.ID,
+		}
+		s.db.CreatePost(context.Background(), postParams)
+	}
+	return nil
+}
+
+func handlerBrowse(s *state, cmd command) error {
+	var limit int32 = 2
+	if len(cmd.args) > 0 {
+		parsedLimit, err := strconv.ParseInt(cmd.args[0], 10, 32)
+		if err != nil {
+			return err
+		}
+		limit = int32(parsedLimit)
+	}
+	userId, err := s.db.GetUser(context.Background(), s.cfg.CurrentUser)
+	if err != nil {
+		return err
+	}
+	postParams := database.GetPostsForUserParams{
+		UserID: userId.ID,
+		Limit:  limit,
+	}
+	posts, err := s.db.GetPostsForUser(context.Background(), postParams)
+	if err != nil {
+		return err
+	}
+	for i, post := range posts {
+		fmt.Printf("%d. %s\n\tDescription: %s\n\tLink: %s\n\n", i+1, post.Title, post.Description, post.Url)
 	}
 	return nil
 }
@@ -333,6 +376,7 @@ func main() {
 	cmds.register("follow", handlerFollow)
 	cmds.register("following", handlerFollowing)
 	cmds.register("unfollow", handlerUnfollow)
+	cmds.register("browse", handlerBrowse)
 
 	// fetching user cli args
 	args := os.Args

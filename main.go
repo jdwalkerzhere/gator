@@ -129,18 +129,42 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 	return &rssFeed, nil
 }
 
-func handlerAgg(s *state, _ command) error {
-	rss, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+func scrapeFeeds(s *state) error {
+	nextFeed, err := s.db.GetNextFeedToFetch(context.Background())
 	if err != nil {
 		return err
 	}
-	fmt.Println(*rss)
+	s.db.MarkFeedFetched(context.Background(), nextFeed.ID)
+	fetchedFeed, err := fetchFeed(context.Background(), nextFeed.Url)
+	if err != nil {
+		return err
+	}
+	for _, feedItem := range fetchedFeed.Channel.Item {
+		fmt.Println(feedItem.Title)
+	}
 	return nil
+}
+
+func handlerAgg(s *state, cmd command) error {
+	if len(cmd.args) < 1 {
+		return fmt.Errorf("No time fetching argument provided, please provide one\n")
+	}
+	fetchFrequency, err := time.ParseDuration(cmd.args[0])
+	if err != nil {
+		return fmt.Errorf("Error parsing provided time [%s], please format as {digit}{duration}, duration options [s,m,h]\n", cmd.args[0])
+	}
+	ticker := time.NewTicker(fetchFrequency)
+	for ; ; <-ticker.C {
+		err := scrapeFeeds(s)
+		if err != nil {
+			return err
+		}
+	}
 }
 
 func handlerAddFeed(s *state, cmd command) error {
 	if len(cmd.args) < 2 {
-		return fmt.Errorf("Insufficient arguments, please provide both feed name and url")
+		return fmt.Errorf("Insufficient arguments, please provide both feed name and url\n")
 	}
 
 	currentUser, err := s.db.GetUser(context.Background(), s.cfg.CurrentUser)
